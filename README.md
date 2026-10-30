@@ -1,7 +1,7 @@
 # 籌碼流向（手機網頁）
 
-靜態網站（GitHub Pages）：族群 → 個股 的外資／投信 1/5/10 日買賣超，加上重點股的 ToAlpha 券商評等、新聞、財報、法說會。
-籌碼與價格來自證交所／櫃買中心公開資料；族群＝`baskets.json`（自訂 25 個主題）＋證交所官方產業別。
+靜態網站（GitHub Pages）：族群 → 個股 的外資／投信 1/5/10/20 日買賣超、近20日K線（含量與5MA/20MA），加上重點股的 ToAlpha 券商評等、新聞、財報、法說會。
+籌碼與價格來自證交所／櫃買中心公開資料；族群＝`baskets.json`（自訂 26 個主題）＋證交所官方產業別。
 **不要把 token、API key 放進這個 repo。** `toalpha_in/`（ToAlpha 原始回傳）已被 .gitignore 排除，不會上傳。
 
 ## 每日重建流程（交易日 17:30 之後；由 agent 執行）
@@ -27,10 +27,13 @@
    （write_to_file 的檔案都在 `/workspace/agent-tools/`；ingest 只認內容，不需手動對應檔名。）
 4. 產生並上線
    ```
-   python3 build.py build      # 產生 data/*.json 與 index.html
+   python3 build.py build      # 產生 data/flows.json、data/detail.json、data/k/<代號>.json（每檔近20日K線＋逐日籌碼，約1,960檔）與 index.html
    python3 build.py publish    # git add/commit/push origin main → GitHub Pages 約 1 分鐘更新
    curl -sI https://<帳號>.github.io/<repo>/ | head -1   # 驗證 200
    ```
+
+流程與 v1 完全相同（fetch → check → select → ToAlpha → ingest → build → publish）；新增的 `data/k/` 由 build 自動產生並隨 publish 一起提交，不需另外步驟。
+需要 ≥40 個交易日的 raw 資料（mi/t86/tpq/tpinst；20日籌碼 + 20MA 暖機），box 上目前已有約 240 個交易日，fetch 每次會回頭補近30個交易日缺的端點；若不足 build 會報錯並提示先 fetch。
 
 缺資料時（ToAlpha 沒回、少某檔）頁面會顯示「無資料」，不會編造。
 
@@ -39,7 +42,8 @@
 - `parse_toalpha.py` — 把 ToAlpha 原始 JSON 轉為頁面資料
 - `ingest.py` — 依內容把 MCP 存檔歸檔到 `toalpha_in/`
 - `index.src.html` → `index.html`（`__VER__` 會被換成日期時間，避免手機快取）
-- `baskets.json` — 主題族群成分（來源：`/workspace/strong_daily/<date>/baskets.json`）
+- `baskets.json` — 主題族群成分（26 個；僅代號）。來源：`/workspace/strong_daily/20261030/baskets.json`（強勢族群日報 pipeline 的 `basket.py` 裡手寫的 B 字典，由當時的 agent 人工挑選，非 ToAlpha、非交易所分類；10/21 起 13→20→23→26 個，10/28 起成分不變）。本站是 2026-10-30 的快照，不會每日自動同步；要增減題材請直接改本檔後重新 build。官方產業＝`/workspace/backtest-chip/raw/twse_company.json` 的「產業別」代碼對照 `build.py` 的 IND（僅上市、≥3檔）。
+- `data/k/<代號>.json` — 每檔個股近20日 OHLC（已還原除權息）、量(張)、5MA/20MA、逐日外資/投信(億)，點進個股頁才載入
 - `data/` — 前端讀取的 json
 
 ## 注意

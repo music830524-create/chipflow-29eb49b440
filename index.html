@@ -46,13 +46,17 @@ h2{font-size:15px;margin:16px 2px 8px;color:#cfd8ee}
 .kv div span{display:block;font-size:12px;color:var(--mut)}
 .kv div b{font-size:16px}
 .row .sub{white-space:nowrap}
+svg.ch{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.ohlc{font-size:12.5px;color:var(--mut);min-height:36px;line-height:1.5}
+.ohlc b{color:var(--tx);font-weight:600}
+.lg{font-size:12px;color:var(--mut)}.lg i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin:0 3px 0 8px;border-radius:2px}
 </style>
 </head>
 <body>
 <header><h1>籌碼流向 <span class="chip" id="verchip"></span></h1><div class="asof" id="asof">載入中…</div></header>
 <main id="app"></main>
 <script>
-const VER="202610302303";
+const VER="202610302322";
 let F=null,D=null,S={tab:'theme',win:5,more:{}};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -63,8 +67,8 @@ const pct=v=>v==null?'–':(v>0?'+':'')+(v*100).toFixed(2)+'%';
 const i0=v=>v==null?'–':(v>0?'+':'')+Math.round(v).toLocaleString('en-US');
 const wd=d=>'日一二三四五六'[new Date(d+'T00:00:00+08:00').getDay()];
 const sum=(a,n)=>a.slice(-n).reduce((x,y)=>x+y,0);
-const NOTE_SECT=`<div class="card note"><b>怎麼算</b><br>外資＝外陸資＋外資自營商；投信＝投信。資料來源：證交所（TWSE）與櫃買中心（TPEx）每日公開的三大法人買賣超。金額（億元）＝各日「買賣超張數×當日收盤價」加總；漲跌幅為族群成分股等權平均（已用除權息因子還原）。<br><b>趨勢旗標</b>：比較近5日合計與前5日（第6–10日）合計——例如「由賣轉買」＝前5日淨賣、近5日淨買；「買超加速」＝近5日買超≥前5日1.5倍。差距小於0.5億視為持平。<br><b>族群定義</b>：「主題族群」是自訂的25個題材籃子（同一檔可出現在多個籃子，不可加總）；「官方產業」是證交所公司產業別（僅上市、成分≥3檔）。兩者不同源，數字不會互相對得上。</div>`;
-const NOTE_DETAIL=`<div class="card note"><b>個股詳細頁範圍</b>：僅涵蓋「主題族群」中近5日資金流入前10名、流出前5名的族群裡，各挑出的重點股（流入各3檔、流出各2檔，共約39檔）。其他個股只有籌碼與漲跌幅，沒有評等／新聞／財報。<br>券商評等、新聞、財報、法說會資料來自 ToAlpha（toalpha.tw）；評等與目標價轉述自公開報導，請以原報導連結為準；新聞只列有發佈時間與來源連結者。非投資建議。</div>`;
+const NOTE_SECT=`<div class="card note"><b>怎麼算</b><br>外資＝外陸資＋外資自營商；投信＝投信。資料來源：證交所（TWSE）與櫃買中心（TPEx）每日公開的三大法人買賣超。金額（億元）＝各日「買賣超張數×當日收盤價」加總；漲跌幅為族群成分股等權平均（已用除權息因子還原）。視窗有 1／5／10／20 個交易日可切換。<br><b>趨勢旗標</b>：仍比較近5日合計與前5日（第6–10日）合計（20日視窗只用來看較長期的累積，不改變旗標）——例如「由賣轉買」＝前5日淨賣、近5日淨買；「買超加速」＝近5日買超≥前5日1.5倍。差距小於0.5億視為持平。<br><b>族群定義</b>：「主題族群」是自訂的25個題材籃子（同一檔可出現在多個籃子，不可加總）；「官方產業」是證交所公司產業別（僅上市、成分≥3檔）。兩者不同源，數字不會互相對得上。<br><b>K線／均線</b>：個股頁的近20個交易日K線取自證交所／櫃買中心每日收盤行情（開高低收、成交量），已用除權息因子還原；紅漲綠跌；5MA、20MA 以還原收盤計算（20MA 需往前多取19天）。族群的「20日等權指數」＝每日以成分股當日還原報酬的簡單平均連乘，起點＝100，不是加權指數。</div>`;
+const NOTE_DETAIL=`<div class="card note"><b>個股詳細頁範圍</b>：僅涵蓋「主題族群」中近5日資金流入前10名、流出前5名的族群裡，各挑出的重點股（流入各3檔、流出各2檔，共約39檔）。其他個股（所有列在族群裡的股票都能點進去）有近20日籌碼、K線與漲跌幅，但沒有評等／新聞／財報。<br>券商評等、新聞、財報、法說會資料來自 ToAlpha（toalpha.tw）；評等與目標價轉述自公開報導，請以原報導連結為準；新聞只列有發佈時間與來源連結者。非投資建議。</div>`;
 
 async function load(){
   const g=async u=>{const r=await fetch(u+'?v='+VER);if(!r.ok)throw new Error(u+' '+r.status);return r.json()};
@@ -75,8 +79,8 @@ async function load(){
   route();
 }
 function winData(o,w){return {f:o['f'+w],t:o['t'+w],fa:o['fa'+w],ta:o['ta'+w],a:o['a'+w],r:o['r'+w]}}
-function stAmt(s,w){const fa=sum(s.fa,w),ta=sum(s.ta,w);return {fa,ta,a:fa+ta}}
-function winTabs(){return `<div class="tabs">${[1,5,10].map(w=>`<button data-w="${w}" class="${S.win==w?'on':''}">${w}日</button>`).join('')}</div>`}
+function stAmt(s,w){const fa=s['fa'+w],ta=s['ta'+w];return {fa,ta,a:fa+ta}}
+function winTabs(){return `<div class="tabs">${[1,5,10,20].map(w=>`<button data-w="${w}" class="${S.win==w?'on':''}">${w}日</button>`).join('')}</div>`}
 
 function home(){
   const m=F.market, ex=S.tab=='theme'?F.theme:F.official;
@@ -102,9 +106,10 @@ function sector(type,name){
   let h=`<a class="back" href="#/">‹ 返回族群列表</a><div class="card"><div class="nm" style="font-size:19px;font-weight:700">${esc(name)} <span class="chip ${v.flag[1]}">${esc(v.flag[0])}</span></div>
   <div class="sub">${type=='theme'?'主題族群':'官方產業'} · ${v.n}檔有資料 · 外資/投信買賣超（億元）</div>
   <table><tr><th></th><th>外資</th><th>投信</th><th>合計</th><th>均漲跌</th></tr>
-  ${[1,5,10].map(w=>`<tr><td>${w}日</td><td class="${cls(v['fa'+w])}">${sgn(v['fa'+w],0)}</td><td class="${cls(v['ta'+w])}">${sgn(v['ta'+w],0)}</td><td class="${cls(v['a'+w])}"><b>${sgn(v['a'+w],0)}</b></td><td class="${cls(v['r'+w])}">${pct(v['r'+w])}</td></tr>`).join('')}</table>
+  ${[1,5,10,20].map(w=>`<tr><td>${w}日</td><td class="${cls(v['fa'+w])}">${sgn(v['fa'+w],0)}</td><td class="${cls(v['ta'+w])}">${sgn(v['ta'+w],0)}</td><td class="${cls(v['a'+w])}"><b>${sgn(v['a'+w],0)}</b></td><td class="${cls(v['r'+w])}">${pct(v['r'+w])}</td></tr>`).join('')}</table>
   <div class="sub" style="margin-top:6px">近5日 ${sgn(v.a5,0)}億 vs 前5日 ${sgn(v.a5prev,0)}億 → ${esc(v.flag[0])}</div>
-  <div class="sub">近10日逐日合計（億）：</div>${bars(v.daily)}</div>`;
+  <div class="sub">近20日逐日 外資＋投信合計（億）：</div>${bars(v.daily)}</div>
+  <div class="card"><div class="sub">近20日等權指數（成分股日報酬平均，起點=100）</div>${idxLine(v.idx)}</div>`;
   h+=winTabs();
   const rows=v.ids.filter(i=>F.stocks[i]).map(i=>{const s=F.stocks[i];return {i,s,a:stAmt(s,S.win)}}).sort((x,y)=>y.a.a-x.a.a);
   const key=type+'/'+name, lim=S.more[key]||40;
@@ -127,8 +132,9 @@ function stock(id){
   let h=`<a class="back" href="javascript:history.back()">‹ 返回</a><div class="card"><div class="nm" style="font-size:19px;font-weight:700">${id} ${esc(s.n)} <span class="chip">${esc(s.mk)}</span></div>
   <div class="row"><div class="sub">收盤 ${s.c}${sec?' · 所屬 '+esc(sec):''}</div><div class="sub">${F.date}</div></div>
   <table><tr><th></th><th>外資(張)</th><th>投信(張)</th><th>合計(億)</th><th>漲跌</th></tr>
-  ${[1,5,10].map(w=>{const a=stAmt(s,w);return `<tr><td>${w}日</td><td class="${cls(s['f'+w])}">${i0(s['f'+w])}</td><td class="${cls(s['t'+w])}">${i0(s['t'+w])}</td><td class="${cls(a.a)}"><b>${sgn(a.a,1)}</b></td><td class="${cls(s['r'+w])}">${pct(s['r'+w])}</td></tr>`}).join('')}</table>
-  <div class="sub" style="margin-top:6px">近10日逐日 外資＋投信（億）：</div>${bars(s.fa.map((x,k)=>x+s.ta[k]))}</div>`;
+  ${[1,5,10,20].map(w=>{const a=stAmt(s,w);return `<tr><td>${w}日</td><td class="${cls(s['f'+w])}">${i0(s['f'+w])}</td><td class="${cls(s['t'+w])}">${i0(s['t'+w])}</td><td class="${cls(a.a)}"><b>${sgn(a.a,1)}</b></td><td class="${cls(s['r'+w])}">${pct(s['r'+w])}</td></tr>`}).join('')}</table>
+  </div><div class="card"><div class="sub" style="margin-bottom:4px">近20個交易日K線（已還原除權息）<span class="lg"><i style="background:#ffb020"></i>5MA<i style="background:#5aa2ff"></i>20MA</span></div><div id="kbox"><div class="note">K線載入中…</div></div></div>`;
+  setTimeout(()=>loadK(id),0);
   if(!d)return h+`<div class="card note">此股不在詳細頁範圍（僅「流入前10／流出前5族群」的重點股有評等、新聞、財報、法說會）。</div>`;
   // 評等
   const rt=d.rt;
@@ -156,6 +162,64 @@ function stock(id){
   // 法說
   h+=`<h2>法說會</h2><div class="card">`+(d.cc&&d.cc.length?d.cc.map(c=>`<div class="nl"><b>${esc(c.date)}（${wd(c.date)}）</b>${c.date<=F.date?' <span class="tag">已舉行/當日</span>':''}${c.inv?' <span class="tag">ToAlpha標記受邀</span>':''}<div class="sub" style="white-space:pre-line">${esc(c.detail)}</div></div>`).join('')+'<div class="sub">來源：ToAlpha 行事曆（未來45日內已公告者）。</div>':'<div class="note">未來45日內 ToAlpha 行事曆沒有此股已公告的法說會。</div>')+`</div>`;
   return h+NOTE_DETAIL;
+}
+
+const SV='http://www.w3.org/2000/svg';
+const f2=v=>v==null?'–':(Math.abs(v)>=1000?v.toFixed(0):v.toFixed(2).replace(/\.?0+$/,''));
+async function loadK(id){
+  const box=$('#kbox'); if(!box)return;
+  try{
+    S.k=S.k||{}; if(!S.k[id]){const r=await fetch('data/k/'+id+'.json?v='+VER); if(!r.ok)throw new Error(r.status); S.k[id]=await r.json();}
+    if(location.hash!=='#/k/'+id)return;
+    const b=$('#kbox'); if(!b)return;
+    b.innerHTML=kline(S.k[id])+`<div class="sub" style="margin-top:8px">近20日逐日 外資＋投信（億）：</div>`+bars(S.k[id].fa.map((x,k)=>x+S.k[id].ta[k]));
+    const k=S.k[id]; showK(k,k.d.length-1);
+    const svg=b.querySelector('svg.ch');
+    const pick=e=>{const r=svg.getBoundingClientRect();const t=e.touches?e.touches[0]:e;const x=(t.clientX-r.left)/r.width*360;showK(k,Math.max(0,Math.min(k.d.length-1,Math.floor((x-KL.l)/KL.sw))))};
+    svg.addEventListener('click',pick); svg.addEventListener('touchstart',pick,{passive:true}); svg.addEventListener('touchmove',pick,{passive:true});
+  }catch(e){box.innerHTML='<div class="note">K線載入失敗（'+esc(e.message)+'）</div>'}
+}
+const KL={l:40,r:4,sw:(360-40-4)/20};
+function kline(k){
+  const n=k.d.length, W=360, pt=6, ph=168, vt=pt+ph+10, vh=44, H=vt+vh+18;
+  const vals=[]; for(let i=0;i<n;i++){[k.h[i],k.l[i],k.m5[i],k.m20[i]].forEach(x=>{if(x!=null)vals.push(x)})}
+  let lo=Math.min(...vals), hi=Math.max(...vals); const pad=(hi-lo)*0.06||1; lo-=pad; hi+=pad;
+  const Y=v=>pt+(hi-v)/(hi-lo)*ph, X=i=>KL.l+KL.sw*(i+0.5);
+  const vmax=Math.max(...k.v.map(x=>x||0),1), cw=Math.max(3,KL.sw*0.62);
+  let g='';
+  for(let j=0;j<4;j++){const v=lo+(hi-lo)*j/3, y=Y(v);g+=`<line x1="${KL.l}" x2="${W-KL.r}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#2b3550" stroke-width="0.6"/><text x="${KL.l-3}" y="${(y+3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#8f9ab3">${f2(v)}</text>`}
+  for(let i=0;i<n;i++){
+    if(k.c[i]==null||k.o[i]==null)continue;
+    const up=k.c[i]>=k.o[i], col=up?'#ff5a5f':'#2fcf84', x=X(i);
+    g+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${Y(k.h[i]).toFixed(1)}" y2="${Y(k.l[i]).toFixed(1)}" stroke="${col}" stroke-width="1.2"/>`;
+    const y1=Y(Math.max(k.o[i],k.c[i])), y2=Y(Math.min(k.o[i],k.c[i]));
+    g+=`<rect x="${(x-cw/2).toFixed(1)}" y="${y1.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1.2,y2-y1).toFixed(1)}" fill="${col}"/>`;
+    const vh_=(k.v[i]||0)/vmax*vh; g+=`<rect x="${(x-cw/2).toFixed(1)}" y="${(vt+vh-vh_).toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(0.5,vh_).toFixed(1)}" fill="${col}" opacity="0.75"/>`;
+  }
+  const line=(a,col)=>{let d='',on=false;a.forEach((v,i)=>{if(v==null){on=false;return}d+=(on?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1);on=true});return `<path d="${d}" fill="none" stroke="${col}" stroke-width="1.4"/>`};
+  g+=line(k.m20,'#5aa2ff')+line(k.m5,'#ffb020');
+  g+=`<text x="${KL.l-3}" y="${vt+9}" text-anchor="end" font-size="9" fill="#8f9ab3">量(張)</text>`;
+  const lab=[0,Math.floor((n-1)/2),n-1]; lab.forEach((i,j)=>{g+=`<text x="${X(i).toFixed(1)}" y="${H-3}" text-anchor="${j==0?'start':j==2?'end':'middle'}" font-size="10" fill="#8f9ab3">${k.d[i].replace('-','/')}</text>`});
+  g+=`<line id="kx" x1="0" x2="0" y1="${pt}" y2="${vt+vh}" stroke="#ffffff" stroke-opacity=".45" stroke-width="1" style="display:none"/>`;
+  return `<div class="ohlc" id="kinfo"></div><svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="近20日K線">${g}</svg>`;
+}
+function showK(k,i){
+  const el=$('#kinfo'); if(!el)return;
+  const pc=i>0?k.c[i-1]:null, chg=(pc&&k.c[i]!=null)?(k.c[i]/pc-1):null;
+  el.innerHTML=`<b>${k.d[i].replace('-','/')}</b> 開<b>${f2(k.o[i])}</b> 高<b>${f2(k.h[i])}</b> 低<b>${f2(k.l[i])}</b> 收<b class="${cls(chg)}">${f2(k.c[i])}</b> ${chg==null?'':`<span class="${cls(chg)}">${pct(chg)}</span>`}<br>量 <b>${k.v[i]==null?'–':k.v[i].toLocaleString('en-US')}</b>張 · 5MA <b>${f2(k.m5[i])}</b> · 20MA <b>${f2(k.m20[i])}</b>`;
+  const x=$('#kx'); if(x){const px=KL.l+KL.sw*(i+0.5);x.setAttribute('x1',px);x.setAttribute('x2',px);x.style.display=''}
+}
+function idxLine(a){
+  const W=360,H=120,l=40,r=6,t=8,b=18, lo=Math.min(...a,100), hi=Math.max(...a,100), p=(hi-lo)*0.1||1, L=lo-p, Hh=hi+p;
+  const X=i=>l+(W-l-r)*i/(a.length-1), Y=v=>t+(Hh-v)/(Hh-L)*(H-t-b);
+  let g=`<line x1="${l}" x2="${W-r}" y1="${Y(100).toFixed(1)}" y2="${Y(100).toFixed(1)}" stroke="#8f9ab3" stroke-dasharray="3 3" stroke-width="0.7"/>`;
+  [hi,lo].forEach(v=>{g+=`<text x="${l-3}" y="${(Y(v)+3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#8f9ab3">${v.toFixed(1)}</text>`});
+  g+=`<text x="${l-3}" y="${(Y(100)+3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#8f9ab3">100</text>`;
+  const last=a[a.length-1], col=last>=100?'#ff5a5f':'#2fcf84';
+  g+=`<path d="${a.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join('')}" fill="none" stroke="${col}" stroke-width="1.8"/>`;
+  g+=`<circle cx="${X(a.length-1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="3" fill="${col}"/>`;
+  g+=`<text x="${l}" y="${H-3}" font-size="10" fill="#8f9ab3">起點(${F.dates[0].slice(5).replace('-','/')}前一日)</text><text x="${W-r}" y="${H-3}" text-anchor="end" font-size="10" fill="#8f9ab3">${F.dates[F.dates.length-1].slice(5).replace('-','/')}</text>`;
+  return `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img" aria-label="20日等權指數">${g}</svg><div class="sub">目前 <b class="${cls(last-100)}">${last.toFixed(1)}</b>（${pct(last/100-1)}）</div>`;
 }
 
 function route(){
