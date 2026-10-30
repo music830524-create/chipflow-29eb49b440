@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#101828">
+<title>籌碼流向</title>
+<style>
+:root{--bg:#0f1420;--card:#192032;--card2:#212a40;--tx:#e8ecf4;--mut:#8f9ab3;--up:#ff5a5f;--dn:#2fcf84;--ac:#5aa2ff;--line:#2b3550}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,"PingFang TC","Noto Sans TC",system-ui,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+a{color:var(--ac)}
+header{position:sticky;top:0;z-index:5;background:#101828f2;backdrop-filter:blur(8px);padding:10px 14px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font-size:17px}
+.asof{font-size:12.5px;color:var(--mut)}
+.asof b{color:#ffd166}
+main{padding:12px 12px 40px;max-width:640px;margin:auto}
+.card{background:var(--card);border-radius:14px;padding:12px 14px;margin:0 0 10px}
+.tabs{display:flex;gap:8px;margin:0 0 10px}
+.tabs button{flex:1;min-height:44px;border:1px solid var(--line);background:var(--card);color:var(--tx);border-radius:12px;font-size:15px}
+.tabs button.on{background:var(--ac);border-color:var(--ac);color:#06101f;font-weight:700}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.item{display:block;color:inherit;text-decoration:none;min-height:56px}
+.item .nm{font-weight:700;font-size:16px}
+.sub{font-size:12.5px;color:var(--mut)}
+.big{font-size:20px;font-weight:700;text-align:right;white-space:nowrap}
+.up{color:var(--up)}.dn{color:var(--dn)}.fl{color:var(--mut)}
+.chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--card2);margin-left:6px;vertical-align:middle}
+.chip.up{background:#4a1f26;color:var(--up)}.chip.dn{background:#12392b;color:var(--dn)}
+.tag{font-size:11px;background:#2a3a63;color:#9cc0ff;border-radius:6px;padding:0 6px;margin-left:6px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 4px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:500;font-size:12.5px}
+h2{font-size:15px;margin:16px 2px 8px;color:#cfd8ee}
+.back{display:inline-flex;align-items:center;min-height:44px;padding:0 6px;color:var(--ac);text-decoration:none;font-size:15px}
+.note{font-size:12.5px;color:var(--mut);line-height:1.6}
+.warn{color:#ffd166;font-size:12px}
+.more{width:100%;min-height:48px;border:1px dashed var(--line);background:none;color:var(--ac);border-radius:12px;font-size:15px}
+.bars{display:flex;align-items:flex-end;gap:3px;height:54px;margin-top:6px}
+.bars i{flex:1;display:block;border-radius:2px;min-height:2px}
+.nl{display:block;padding:9px 0;border-bottom:1px solid var(--line);color:inherit;text-decoration:none;min-height:44px}
+.nl:last-child{border:0}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+.kv div span{display:block;font-size:12px;color:var(--mut)}
+.kv div b{font-size:16px}
+.row .sub{white-space:nowrap}
+</style>
+</head>
+<body>
+<header><h1>籌碼流向 <span class="chip" id="verchip"></span></h1><div class="asof" id="asof">載入中…</div></header>
+<main id="app"></main>
+<script>
+const VER="202610302303";
+let F=null,D=null,S={tab:'theme',win:5,more:{}};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl=u=>/^https?:\/\//i.test(u||'')?esc(u):'#';
+const cls=v=>v>0?'up':v<0?'dn':'fl';
+const sgn=(v,d=1)=>v==null?'–':(v>0?'+':'')+Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct=v=>v==null?'–':(v>0?'+':'')+(v*100).toFixed(2)+'%';
+const i0=v=>v==null?'–':(v>0?'+':'')+Math.round(v).toLocaleString('en-US');
+const wd=d=>'日一二三四五六'[new Date(d+'T00:00:00+08:00').getDay()];
+const sum=(a,n)=>a.slice(-n).reduce((x,y)=>x+y,0);
+const NOTE_SECT=`<div class="card note"><b>怎麼算</b><br>外資＝外陸資＋外資自營商；投信＝投信。資料來源：證交所（TWSE）與櫃買中心（TPEx）每日公開的三大法人買賣超。金額（億元）＝各日「買賣超張數×當日收盤價」加總；漲跌幅為族群成分股等權平均（已用除權息因子還原）。<br><b>趨勢旗標</b>：比較近5日合計與前5日（第6–10日）合計——例如「由賣轉買」＝前5日淨賣、近5日淨買；「買超加速」＝近5日買超≥前5日1.5倍。差距小於0.5億視為持平。<br><b>族群定義</b>：「主題族群」是自訂的25個題材籃子（同一檔可出現在多個籃子，不可加總）；「官方產業」是證交所公司產業別（僅上市、成分≥3檔）。兩者不同源，數字不會互相對得上。</div>`;
+const NOTE_DETAIL=`<div class="card note"><b>個股詳細頁範圍</b>：僅涵蓋「主題族群」中近5日資金流入前10名、流出前5名的族群裡，各挑出的重點股（流入各3檔、流出各2檔，共約39檔）。其他個股只有籌碼與漲跌幅，沒有評等／新聞／財報。<br>券商評等、新聞、財報、法說會資料來自 ToAlpha（toalpha.tw）；評等與目標價轉述自公開報導，請以原報導連結為準；新聞只列有發佈時間與來源連結者。非投資建議。</div>`;
+
+async function load(){
+  const g=async u=>{const r=await fetch(u+'?v='+VER);if(!r.ok)throw new Error(u+' '+r.status);return r.json()};
+  [F,D]=await Promise.all([g('data/flows.json'),g('data/detail.json')]);
+  const d=F.date;
+  $('#asof').innerHTML=`資料日期 <b>${d}（${wd(d)}）收盤</b> · 產生於 ${esc(F.generated)}（台北時間）`;
+  $('#verchip').textContent=d.slice(5);
+  route();
+}
+function winData(o,w){return {f:o['f'+w],t:o['t'+w],fa:o['fa'+w],ta:o['ta'+w],a:o['a'+w],r:o['r'+w]}}
+function stAmt(s,w){const fa=sum(s.fa,w),ta=sum(s.ta,w);return {fa,ta,a:fa+ta}}
+function winTabs(){return `<div class="tabs">${[1,5,10].map(w=>`<button data-w="${w}" class="${S.win==w?'on':''}">${w}日</button>`).join('')}</div>`}
+
+function home(){
+  const m=F.market, ex=S.tab=='theme'?F.theme:F.official;
+  const names=Object.keys(ex).sort((a,b)=>ex[b]['a'+S.win]-ex[a]['a'+S.win]);
+  let h=`<div class="card"><div class="sub">全市場（${m.n}檔普通股）近${S.win}日 外資＋投信</div>
+   <div class="row"><div><span class="${cls(m['fa'+S.win])}">外資 ${sgn(m['fa'+S.win],0)}億</span> · <span class="${cls(m['ta'+S.win])}">投信 ${sgn(m['ta'+S.win],0)}億</span></div><div class="big ${cls(m['a'+S.win])}">${sgn(m['a'+S.win],0)}<small>億</small></div></div>
+   <div class="sub">趨勢：<span class="chip ${m.flag[1]}">${esc(m.flag[0])}</span> 近5日 ${sgn(m.a5,0)}億 vs 前5日 ${sgn(m.a5prev,0)}億</div></div>`;
+  h+=`<div class="tabs"><button data-tab="theme" class="${S.tab=='theme'?'on':''}">主題族群</button><button data-tab="official" class="${S.tab=='official'?'on':''}">官方產業</button></div>`+winTabs();
+  h+=`<div class="sub" style="margin:0 2px 8px">依「近${S.win}日 外資＋投信 合計」由買超到賣超排序 · 點族群看個股</div>`;
+  for(const k of names){const v=ex[k],w=S.win,a=v['a'+w];
+    const has=S.tab=='theme'&&(F.inflow.includes(k)||F.outflow.includes(k));
+    h+=`<a class="card item" href="#/s/${S.tab}/${encodeURIComponent(k)}"><div class="row"><div><div class="nm">${esc(k)}${has?'<span class="tag">有個股詳情</span>':''}</div>
+      <div class="sub">外資 <span class="${cls(v['fa'+w])}">${sgn(v['fa'+w],0)}</span> · 投信 <span class="${cls(v['ta'+w])}">${sgn(v['ta'+w],0)}</span> 億 · 均漲跌 <span class="${cls(v['r'+w])}">${pct(v['r'+w])}</span></div>
+      <div class="sub"><span class="chip ${v.flag[1]}" style="margin-left:0">${esc(v.flag[0])}</span> 近5日${sgn(v.a5,0)} / 前5日${sgn(v.a5prev,0)} 億</div></div>
+      <div class="big ${cls(a)}">${sgn(a,0)}<small>億</small></div></div></a>`;}
+  h+=NOTE_SECT+NOTE_DETAIL;
+  return h;
+}
+
+function sector(type,name){
+  const ex=type=='theme'?F.theme:F.official, v=ex[name];
+  if(!v)return `<a class="back" href="#/">‹ 返回</a><div class="card">找不到族群</div>`;
+  let h=`<a class="back" href="#/">‹ 返回族群列表</a><div class="card"><div class="nm" style="font-size:19px;font-weight:700">${esc(name)} <span class="chip ${v.flag[1]}">${esc(v.flag[0])}</span></div>
+  <div class="sub">${type=='theme'?'主題族群':'官方產業'} · ${v.n}檔有資料 · 外資/投信買賣超（億元）</div>
+  <table><tr><th></th><th>外資</th><th>投信</th><th>合計</th><th>均漲跌</th></tr>
+  ${[1,5,10].map(w=>`<tr><td>${w}日</td><td class="${cls(v['fa'+w])}">${sgn(v['fa'+w],0)}</td><td class="${cls(v['ta'+w])}">${sgn(v['ta'+w],0)}</td><td class="${cls(v['a'+w])}"><b>${sgn(v['a'+w],0)}</b></td><td class="${cls(v['r'+w])}">${pct(v['r'+w])}</td></tr>`).join('')}</table>
+  <div class="sub" style="margin-top:6px">近5日 ${sgn(v.a5,0)}億 vs 前5日 ${sgn(v.a5prev,0)}億 → ${esc(v.flag[0])}</div>
+  <div class="sub">近10日逐日合計（億）：</div>${bars(v.daily)}</div>`;
+  h+=winTabs();
+  const rows=v.ids.filter(i=>F.stocks[i]).map(i=>{const s=F.stocks[i];return {i,s,a:stAmt(s,S.win)}}).sort((x,y)=>y.a.a-x.a.a);
+  const key=type+'/'+name, lim=S.more[key]||40;
+  h+=`<div class="sub" style="margin:0 2px 8px">個股依近${S.win}日合計排序（${rows.length}檔）</div>`;
+  for(const r of rows.slice(0,lim)){const s=r.s,w=S.win,hasD=!!D.detail[r.i];
+    h+=`<a class="card item" href="#/k/${r.i}"><div class="row"><div><div class="nm">${r.i} ${esc(s.n)}${hasD?'<span class="tag">詳情</span>':''}</div>
+    <div class="sub">收 ${s.c} · ${w}日漲跌 <span class="${cls(s['r'+w])}">${pct(s['r'+w])}</span></div>
+    <div class="sub">外資 <span class="${cls(s['f'+w])}">${i0(s['f'+w])}</span> · 投信 <span class="${cls(s['t'+w])}">${i0(s['t'+w])}</span> 張</div></div>
+    <div class="big ${cls(r.a.a)}">${sgn(r.a.a,1)}<small>億</small></div></div></a>`;}
+  if(rows.length>lim)h+=`<button class="more" data-more="${esc(key)}">顯示更多（還有 ${rows.length-lim} 檔）</button>`;
+  return h+NOTE_DETAIL;
+}
+function bars(arr){const mx=Math.max(...arr.map(Math.abs),1e-9);
+  return `<div class="bars">${arr.map((x,k)=>`<i title="${F.dates[k]} ${sgn(x,0)}億" style="height:${Math.max(2,Math.abs(x)/mx*100)}%;background:${x>=0?'var(--up)':'var(--dn)'}"></i>`).join('')}</div><div class="sub row"><span>${F.dates[0].slice(5)}</span><span>${F.dates[F.dates.length-1].slice(5)}</span></div>`}
+
+function stock(id){
+  const s=F.stocks[id]; if(!s)return `<a class="back" href="#/">‹ 返回</a><div class="card">找不到此股票</div>`;
+  const d=D.detail[id];
+  let sec=d&&d.sector;
+  let h=`<a class="back" href="javascript:history.back()">‹ 返回</a><div class="card"><div class="nm" style="font-size:19px;font-weight:700">${id} ${esc(s.n)} <span class="chip">${esc(s.mk)}</span></div>
+  <div class="row"><div class="sub">收盤 ${s.c}${sec?' · 所屬 '+esc(sec):''}</div><div class="sub">${F.date}</div></div>
+  <table><tr><th></th><th>外資(張)</th><th>投信(張)</th><th>合計(億)</th><th>漲跌</th></tr>
+  ${[1,5,10].map(w=>{const a=stAmt(s,w);return `<tr><td>${w}日</td><td class="${cls(s['f'+w])}">${i0(s['f'+w])}</td><td class="${cls(s['t'+w])}">${i0(s['t'+w])}</td><td class="${cls(a.a)}"><b>${sgn(a.a,1)}</b></td><td class="${cls(s['r'+w])}">${pct(s['r'+w])}</td></tr>`}).join('')}</table>
+  <div class="sub" style="margin-top:6px">近10日逐日 外資＋投信（億）：</div>${bars(s.fa.map((x,k)=>x+s.ta[k]))}</div>`;
+  if(!d)return h+`<div class="card note">此股不在詳細頁範圍（僅「流入前10／流出前5族群」的重點股有評等、新聞、財報、法說會）。</div>`;
+  // 評等
+  const rt=d.rt;
+  h+=`<h2>券商評等 / 目標價</h2>`;
+  if(rt){h+=`<div class="card"><div class="kv"><div><span>統計券商</span><b>${rt.n} 家（多${rt.pos}／中${rt.neu}／空${rt.neg}）</b></div>
+   <div><span>目標價中位數</span><b>${rt.med??'–'}</b></div><div><span>最高／最低</span><b>${rt.hi??'–'} / ${rt.lo??'–'}</b></div>
+   <div><span>相對收盤 ${rt.close??''}</span><b class="${cls(rt.up)}">${rt.up==null?'–':pct(rt.up)}</b></div></div>
+   <div class="sub" style="margin-top:6px">近60日公開報導整理 · 截至 ${esc(rt.asof)} · <a href="${safeUrl(rt.link)}" target="_blank" rel="noopener">ToAlpha</a></div></div>`;
+   if(d.ratings&&d.ratings.length){h+=`<div class="card"><div class="sub">近期升降評／報告（新到舊）</div>`+d.ratings.map(x=>`<a class="nl" href="${safeUrl(x.u)}" target="_blank" rel="noopener"><div class="row"><b>${esc(x.b)}</b><span class="sub">${esc(x.d)}</span></div>
+     <div class="sub">${x.r?esc(x.r):'評等未載'}${x.a?' · '+esc(x.a):''}${x.tp?' · 目標價 '+x.tp:''}</div><div style="font-size:13px">${esc(x.t)}</div>${x.warn?'<div class="warn">⚠ 標題未提及本檔，可能為多檔合併報導，請點開核對</div>':''}<div class="sub">${esc(x.s||'')} ↗</div></a>`).join('')+`</div>`}
+  }else h+=`<div class="card note">無資料</div>`;
+  // 新聞
+  h+=`<h2>近期新聞</h2><div class="card">`+(d.news&&d.news.length?d.news.map(x=>`<a class="nl" href="${safeUrl(x.u)}" target="_blank" rel="noopener"><div style="font-size:14px">${esc(x.t)}</div><div class="sub">${esc(x.time)} · ${esc(x.src||'')} ↗</div></a>`).join(''):'<div class="note">ToAlpha 近14–30日沒有收錄此股新聞（不代表沒有新聞）。</div>')+`</div>`;
+  // 財報
+  const f=d.fin; h+=`<h2>最新一季財報重點</h2>`;
+  if(f){const P=(x)=>x==null?'–':(x*100).toFixed(1)+'%';
+    h+=`<div class="card"><div class="sub">${esc(f.p)} · 公開資訊觀測站財報 · <a href="${safeUrl(f.link)}" target="_blank" rel="noopener">ToAlpha</a></div><div class="kv" style="margin-top:6px">
+    <div><span>營收（億）</span><b>${f.rev??'–'}</b></div><div><span>營收年增</span><b class="${cls(f.yoy)}">${f.yoy==null?'–':pct(f.yoy)}</b></div>
+    <div><span>毛利率</span><b>${P(f.gm)}</b></div><div><span>營業利益率</span><b>${P(f.om)}</b></div>
+    <div><span>稅後淨利（億）</span><b>${f.ni??'–'}</b></div><div><span>EPS（元）</span><b>${f.eps??'–'}</b></div>
+    <div><span>近四季EPS</span><b>${f.epsttm??'–'}</b></div><div><span>ROE（近四季）</span><b>${P(f.roe)}</b></div></div>
+    ${f.prev?`<div class="sub" style="margin-top:6px">上一季 ${esc(f.prev.p)}：營收 ${f.prev.rev??'–'}億 · EPS ${f.prev.eps??'–'} · 毛利率 ${P(f.prev.gm)}</div>`:''}
+    <div class="sub">「–」表示來源未提供（例如金融股無毛利率）。尚未公布的當季財報不會出現。</div></div>`;
+  }else h+=`<div class="card note">無資料</div>`;
+  // 法說
+  h+=`<h2>法說會</h2><div class="card">`+(d.cc&&d.cc.length?d.cc.map(c=>`<div class="nl"><b>${esc(c.date)}（${wd(c.date)}）</b>${c.date<=F.date?' <span class="tag">已舉行/當日</span>':''}${c.inv?' <span class="tag">ToAlpha標記受邀</span>':''}<div class="sub" style="white-space:pre-line">${esc(c.detail)}</div></div>`).join('')+'<div class="sub">來源：ToAlpha 行事曆（未來45日內已公告者）。</div>':'<div class="note">未來45日內 ToAlpha 行事曆沒有此股已公告的法說會。</div>')+`</div>`;
+  return h+NOTE_DETAIL;
+}
+
+function route(){
+  if(!F)return;
+  const h=location.hash||'#/', p=h.split('/');
+  let html;
+  if(p[1]=='s')html=sector(p[2],decodeURIComponent(p[3]||''));
+  else if(p[1]=='k')html=stock(p[2]);
+  else html=home();
+  $('#app').innerHTML=html; window.scrollTo(0,S.keep||0); S.keep=0;
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  if(b.dataset.tab){S.tab=b.dataset.tab;S.keep=window.scrollY;route()}
+  else if(b.dataset.w){S.win=+b.dataset.w;S.keep=window.scrollY;route()}
+  else if(b.dataset.more){S.more[b.dataset.more]=(S.more[b.dataset.more]||40)+60;S.keep=window.scrollY;route()}
+});
+addEventListener('hashchange',route);
+load().catch(e=>{$('#app').innerHTML='<div class="card">資料載入失敗：'+esc(e.message)+'</div>'});
+</script>
+</body>
+</html>
