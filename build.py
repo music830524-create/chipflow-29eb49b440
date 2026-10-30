@@ -175,6 +175,17 @@ def sectors(stocks):
     official = {k: dict(ids=v, **agg(v, stocks)) for k, v in off.items() if len(v) >= 3 and k in IND.values()}
     return theme, official
 
+def ext_sectors(stocks):
+    """新增族群（參考外部分類）：baskets_ext.json；只做籌碼/指數，不參與 pick()（重點股與詳情仍由原 26 個籃子決定）"""
+    p = H + "/baskets_ext.json"
+    if not os.path.exists(p): return {}
+    out = {}
+    for k, v in json.load(open(p)).items():
+        ids = [i for i in v["ids"] if i in stocks]
+        if len(ids) < 3: continue
+        out[k] = dict(ids=ids, label=v.get("label", "新增族群（參考外部分類）"), source=v.get("source", ""), **agg(ids, stocks))
+    return out
+
 def pick(theme, stocks):
     ranked = sorted(theme.items(), key=lambda kv: -kv[1]["a5"])
     ins = [k for k, v in ranked[:N_IN]]; outs = [k for k, v in ranked[::-1][:N_OUT] if k not in ins]
@@ -206,7 +217,7 @@ def build_detail(sel, date):
     return {sid: P.parse_stock(sid, load_in, date) for sid in sel}
 
 def cmd_build():
-    dates, w, stocks, kl = compute(); theme, official = sectors(stocks); sel, ins, outs = pick(theme, stocks)
+    dates, w, stocks, kl = compute(); theme, official = sectors(stocks); ext = ext_sectors(stocks); sel, ins, outs = pick(theme, stocks)
     date = dates[-1]
     allf = agg(list(stocks), stocks)
     # 瘦身：每檔只留 1/5/10/20 日合計；逐日序列與 K 線放到 data/k/<sid>.json，點進個股才載入
@@ -218,11 +229,11 @@ def cmd_build():
             c["f%d" % w_] = round(sum(x["f"][-w_:])); c["t%d" % w_] = round(sum(x["t"][-w_:]))
             c["fa%d" % w_] = round(sum(x["fa"][-w_:]), 2); c["ta%d" % w_] = round(sum(x["ta"][-w_:]), 2)
         comp[sid] = c
-    for d_ in list(theme.values()) + list(official.values()) + [allf]:
+    for d_ in list(theme.values()) + list(official.values()) + list(ext.values()) + [allf]:
         for k_ in ("r1", "r5", "r10", "r20"):
             if d_.get(k_) is not None: d_[k_] = round(d_[k_], 4)
     flows = dict(date=date, dates=w, generated=dt.datetime.now(TZ).strftime("%Y-%m-%d %H:%M"), market=allf,
-                 theme=theme, official=official, stocks=comp, inflow=ins, outflow=outs)
+                 theme=theme, official=official, ext=ext, stocks=comp, inflow=ins, outflow=outs)
     json.dump(flows, open(H + "/data/flows.json", "w"), ensure_ascii=False, separators=(",", ":"))
     kd = H + "/data/k"; os.makedirs(kd, exist_ok=True)
     for p in glob.glob(kd + "/*.json"): os.remove(p)       # 清掉已下市/不在清單的舊檔
