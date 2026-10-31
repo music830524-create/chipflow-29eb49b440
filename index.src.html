@@ -125,6 +125,7 @@ function sector(type,name){
 function bars(arr){const mx=Math.max(...arr.map(Math.abs),1e-9);
   return `<div class="bars">${arr.map((x,k)=>`<i title="${F.dates[k]} ${sgn(x,0)}億" style="height:${Math.max(2,Math.abs(x)/mx*100)}%;background:${x>=0?'var(--up)':'var(--dn)'}"></i>`).join('')}</div><div class="sub row"><span>${F.dates[0].slice(5)}</span><span>${F.dates[F.dates.length-1].slice(5)}</span></div>`}
 
+const stl=(d,k)=>d&&d.stale&&d.stale[k]?`<div class="warn" style="margin:0 2px 6px">⚠ 本次更新時此項資料抓取失敗，以下沿用 ${esc(d.stale[k])} 的資料</div>`:'';
 function stock(id){
   const s=F.stocks[id]; if(!s)return `<a class="back" href="#/">‹ 返回</a><div class="card">找不到此股票</div>`;
   const d=D.detail[id];
@@ -138,7 +139,7 @@ function stock(id){
   if(!d)return h+`<div class="card note">此股不在詳細頁範圍（僅「流入前10／流出前5族群」的重點股有評等、新聞、財報、法說會）。</div>`;
   // 評等
   const rt=d.rt;
-  h+=`<h2>券商評等 / 目標價</h2>`;
+  h+=`<h2>券商評等 / 目標價</h2>`+stl(d,'br');
   if(rt){h+=`<div class="card"><div class="kv"><div><span>統計券商</span><b>${rt.n} 家（多${rt.pos}／中${rt.neu}／空${rt.neg}）</b></div>
    <div><span>目標價中位數</span><b>${rt.med??'–'}</b></div><div><span>最高／最低</span><b>${rt.hi??'–'} / ${rt.lo??'–'}</b></div>
    <div><span>相對收盤 ${rt.close??''}</span><b class="${cls(rt.up)}">${rt.up==null?'–':pct(rt.up)}</b></div></div>
@@ -147,9 +148,9 @@ function stock(id){
      <div class="sub">${x.r?esc(x.r):'評等未載'}${x.a?' · '+esc(x.a):''}${x.tp?' · 目標價 '+x.tp:''}</div><div style="font-size:13px">${esc(x.t)}</div>${x.warn?'<div class="warn">⚠ 標題未提及本檔，可能為多檔合併報導，請點開核對</div>':''}<div class="sub">${esc(x.s||'')} ↗</div></a>`).join('')+`</div>`}
   }else h+=`<div class="card note">無資料</div>`;
   // 新聞
-  h+=`<h2>近期新聞</h2><div class="card">`+(d.news&&d.news.length?d.news.map(x=>`<a class="nl" href="${safeUrl(x.u)}" target="_blank" rel="noopener"><div style="font-size:14px">${esc(x.t)}</div><div class="sub">${esc(x.time)} · ${esc(x.src||'')} ↗</div></a>`).join(''):'<div class="note">ToAlpha 近14–30日沒有收錄此股新聞（不代表沒有新聞）。</div>')+`</div>`;
+  h+=`<h2>近期新聞</h2>`+stl(d,'news')+`<div class="card">`+(d.news&&d.news.length?d.news.map(x=>`<a class="nl" href="${safeUrl(x.u)}" target="_blank" rel="noopener"><div style="font-size:14px">${esc(x.t)}</div><div class="sub">${esc(x.time)} · ${esc(x.src||'')} ↗</div></a>`).join(''):'<div class="note">ToAlpha 近14–30日沒有收錄此股新聞（不代表沒有新聞）。</div>')+`</div>`;
   // 財報
-  const f=d.fin; h+=`<h2>最新一季財報重點</h2>`;
+  const f=d.fin; h+=`<h2>最新一季財報重點</h2>`+stl(d,'fin');
   if(f){const P=(x)=>x==null?'–':(x*100).toFixed(1)+'%';
     h+=`<div class="card"><div class="sub">${esc(f.p)} · 公開資訊觀測站財報 · <a href="${safeUrl(f.link)}" target="_blank" rel="noopener">ToAlpha</a></div><div class="kv" style="margin-top:6px">
     <div><span>營收（億）</span><b>${f.rev??'–'}</b></div><div><span>營收年增</span><b class="${cls(f.yoy)}">${f.yoy==null?'–':pct(f.yoy)}</b></div>
@@ -160,7 +161,7 @@ function stock(id){
     <div class="sub">「–」表示來源未提供（例如金融股無毛利率）。尚未公布的當季財報不會出現。</div></div>`;
   }else h+=`<div class="card note">無資料</div>`;
   // 法說
-  h+=`<h2>法說會</h2><div class="card">`+(d.cc&&d.cc.length?d.cc.map(c=>`<div class="nl"><b>${esc(c.date)}（${wd(c.date)}）</b>${c.date<=F.date?' <span class="tag">已舉行/當日</span>':''}${c.inv?' <span class="tag">ToAlpha標記受邀</span>':''}<div class="sub" style="white-space:pre-line">${esc(c.detail)}</div></div>`).join('')+'<div class="sub">來源：ToAlpha 行事曆（未來45日內已公告者）。</div>':'<div class="note">未來45日內 ToAlpha 行事曆沒有此股已公告的法說會。</div>')+`</div>`;
+  h+=`<h2>法說會</h2>`+stl(d,'cc')+`<div class="card">`+(d.cc&&d.cc.length?d.cc.map(c=>`<div class="nl"><b>${esc(c.date)}（${wd(c.date)}）</b>${c.date<=F.date?' <span class="tag">已舉行/當日</span>':''}${c.inv?' <span class="tag">ToAlpha標記受邀</span>':''}<div class="sub" style="white-space:pre-line">${esc(c.detail)}</div></div>`).join('')+'<div class="sub">來源：ToAlpha 行事曆（未來45日內已公告者）。</div>':'<div class="note">未來45日內 ToAlpha 行事曆沒有此股已公告的法說會。</div>')+`</div>`;
   return h+NOTE_DETAIL;
 }
 

@@ -1,0 +1,52 @@
+name: 每日更新籌碼流向
+
+on:
+  schedule:
+    - cron: '0 10 * * 1-5'      # UTC 10:00 = 台北時間 18:00（平日；GitHub 排程可能延遲數分鐘到數十分鐘）
+  workflow_dispatch:
+    inputs:
+      force:
+        description: '強制用最新完整交易日重建（略過「今天是否交易日」檢查，測試/補跑用）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: daily-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 抓資料並重建（不需 LLM）
+        env:
+          TOALPHA_API_KEY: ${{ secrets.TOALPHA_API_KEY }}   # 選用；沒設就不帶金鑰
+          FORCE: ${{ inputs.force }}
+        run: |
+          if [ "$FORCE" = "true" ]; then python3 daily.py --force; else python3 daily.py; fi
+      - name: 有變更才 commit／push（GITHUB_TOKEN）
+        id: commit
+        run: |
+          git config user.name "chipflow-bot"
+          git config user.email "chipflow-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "沒有變更（休市日或資料未更新）"; echo "changed=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          D=$(python3 -c "import json;print(json.load(open('data/flows.json'))['date'])")
+          git commit -m "update $D (actions)"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+      - name: 觸發 GitHub Pages 重新建置
+        if: steps.commit.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" --silent && echo "已要求 Pages 建置"

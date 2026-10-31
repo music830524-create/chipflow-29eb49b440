@@ -16,7 +16,7 @@ def news_by_id():
     global _news
     if _news is None:
         _news = {}
-        for f in sorted(os.listdir(f"{H}/toalpha_in")):
+        for f in sorted(os.listdir(f"{H}/toalpha_in") if os.path.isdir(f"{H}/toalpha_in") else []):
             if f.startswith("news_"):
                 j = _raw(f) or {}
                 for i in j.get("items", []): _news.setdefault(i["id"], {})[i.get("url") or i["title"]] = i

@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""籌碼流向手機網頁 build 腳本。
+"""籌碼流向手機網頁 build 腳本（每日由 GitHub Actions 執行 daily.py，不需 LLM）。
 
-流程（每個交易日 17:30 後）：
-  python3 build.py fetch            # 補抓 TWSE/TPEx 當日資料（沿用 /workspace/backtest-chip/live.py 的抓取）
-  python3 build.py select           # 算完籌碼後，印出需要查 ToAlpha 的股票清單（寫 data/selected.json）
-  ... agent 依 README 用 ToAlpha MCP 查詢，結果存 toalpha_in/<tool>_<id>.json ...
+  python3 build.py fetch            # 抓 TWSE/TPEx 公開資料 → hist/、src/（見 pubdata.py）
+  python3 build.py check            # exit 3=休市、4=資料未齊
+  python3 build.py select           # 純程式規則挑重點股（約39檔），寫 data/selected.json
+  python3 toalpha_fetch.py          # 用 Python 直接呼叫 ToAlpha MCP，寫 toalpha_in/
   python3 build.py build            # 產生 data/flows.json、data/detail.json、data/k/<代號>.json（近20日K線）、index.html
-  python3 build.py publish          # git commit + push（GitHub Pages）
-  python3 build.py all              # fetch + select + build（假設 toalpha_in 已備好）+ 不含 publish
+  python3 daily.py [--force]        # 以上全部串起來
 
-視窗：1/5/10/20 個交易日；K線 20 根（OHLC 取自 mi 每日收盤行情與 tpq，經 exright.csv 因子還原；MA20 需 40 個交易日 raw）。
-資料：籌碼與價格＝證交所／櫃買中心公開資料；族群＝baskets.json（自訂主題族群）與證交所官方產業別（上市）；
+視窗：1/5/10/20 個交易日；K線 20 根（OHLC 取自 hist/，經 src/exright.csv 因子還原；MA20 需 40 個交易日）。
+資料：籌碼與價格＝證交所／櫃買中心公開資料；族群＝baskets.json（自訂主題）、baskets_ext.json（新增族群）與證交所官方產業別（上市）；
       個股詳情＝ToAlpha MCP（券商評等、新聞、財報、法說會）。
 """
 import os, sys, json, glob, re, subprocess, datetime as dt
 H = os.path.dirname(os.path.abspath(__file__))
-CHIP = "/workspace/backtest-chip"
-RAW = CHIP + "/raw"
+sys.path.insert(0, H)
+import pubdata
 TZ = dt.timezone(dt.timedelta(hours=8))
 N_IN, N_OUT = 10, 5          # 詳情頁：流入前 N_IN 個族群、流出前 N_OUT 個族群
 K_IN, K_OUT = 3, 2           # 每個族群取幾檔（依 5 日合計買/賣超金額）
@@ -25,65 +24,41 @@ IND = {'01':'水泥','02':'食品','03':'塑膠','04':'紡織','05':'電機機�
 def num(x):
     try: return float(str(x).replace(",", "").strip())
     except Exception: return None
-def common(s): return re.fullmatch(r"[1-9]\d{3}", s) is not None
-def valid(p): return os.path.exists(p) and os.path.getsize(p) > 2000
-def jl(k, d):
-    p = f"{RAW}/{k}/{d}.json"
-    return json.load(open(p)) if valid(p) else None
 
 def fetch():
-    sys.path.insert(0, CHIP)
-    import live
-    asof = dt.datetime.now(TZ).date()
-    live.fetch_incremental(asof)
+    """自給自足抓公開資料：TWSE/TPEx 當日（含近7天缺漏補齊）、除權息、上市公司產業別 → hist/、src/"""
+    pubdata.fetch_all()
 
 def cmd_check():
-    """fetch 之後呼叫：今天沒有 TWSE 資料（假日/休市）就以 exit 3 結束，routine 應直接跳過。"""
+    """exit 0＝今天資料齊全；exit 3＝今天休市（TWSE 無收盤行情）；exit 4＝今天有行情但外資/投信/上櫃資料尚未齊（可稍後重試）。"""
     today = dt.datetime.now(TZ).date().isoformat(); last = trading_dates()[-1]
-    if last != today:
-        print("SKIP: 今天(%s)沒有交易資料，最新為 %s（休市或資料尚未公布）" % (today, last)); sys.exit(3)
-    print("OK data date", last)
+    if last == today:
+        print("OK data date", last); return
+    h = pubdata.read_hist(today)
+    if h and not h.get("complete"):
+        print("WAIT: 今天(%s)資料尚未齊全（法人買賣超或上櫃資料未公布），最新完整為 %s" % (today, last)); sys.exit(4)
+    print("SKIP: 今天(%s)沒有交易資料，最新為 %s（休市或資料尚未公布）" % (today, last)); sys.exit(3)
 
 def trading_dates():
-    return sorted(os.path.basename(p)[:-5] for p in glob.glob(f"{RAW}/mi/*.json") if valid(p))
+    return pubdata.hist_dates(complete_only=True)
 
 NDAY = 20      # 籌碼視窗 / K線根數
 NHIST = 40     # 需要的交易日數：K線20根 + MA20 暖機19天 + 1（約需 40）
 
 def load_days(dates):
-    """回傳 {date: {sid: dict(name, mk, o,h,l,close, v, f, t)}}；f/t/v 單位＝張。"""
+    """回傳 {date: {sid: dict(name, mk, o,h,l,close, v, f, t)}}；f/t/v 單位＝張。讀 hist/<日期>.json。"""
     days = {}
     for d in dates:
         px = {}
-        m = jl("mi", d)
-        for tb in m["tables"]:
-            if "每日收盤行情" in (tb.get("title") or ""):
-                for r in tb["data"]:
-                    sid = r[0].strip()
-                    if common(sid) and num(r[8]):
-                        px[sid] = dict(name=r[1].strip(), mk="上市", o=num(r[5]), h=num(r[6]), l=num(r[7]), close=num(r[8]), v=(num(r[2]) or 0) / 1000, f=0.0, t=0.0)
-        t = jl("t86", d)
-        for r in (t or {}).get("data", []):
-            sid = r[0].strip()
-            if sid in px: px[sid]["f"] = ((num(r[4]) or 0) + (num(r[7]) or 0)) / 1000; px[sid]["t"] = (num(r[10]) or 0) / 1000
-        q = jl("tpq", d)
-        if q and q.get("tables"):
-            for r in q["tables"][0]["data"]:
-                sid = r[0].strip()
-                if common(sid) and num(r[2]):
-                    px[sid] = dict(name=r[1].strip(), mk="上櫃", o=num(r[4]), h=num(r[5]), l=num(r[6]), close=num(r[2]), v=(num(r[7]) or 0) / 1000, f=0.0, t=0.0)
-        ti = jl("tpinst", d)
-        if ti and ti.get("tables"):
-            for r in ti["tables"][0]["data"]:
-                sid = r[0].strip()
-                if sid in px and px[sid]["mk"] == "上櫃": px[sid]["f"] = (num(r[10]) or 0) / 1000; px[sid]["t"] = (num(r[13]) or 0) / 1000
+        for sid, r in pubdata.read_hist(d)["stocks"].items():
+            px[sid] = dict(name=r[0], mk=r[1], o=r[2], h=r[3], l=r[4], close=r[5], v=r[6], f=r[7], t=r[8])
         days[d] = px
     return days
 
 def exfactors():
     import csv
     f = {}
-    for r in csv.DictReader(open(CHIP + "/data/exright.csv")): f[(r["date"], r["sid"])] = float(r["factor"])
+    for r in csv.DictReader(open(H + "/src/exright.csv")): f[(r["date"], r["sid"])] = float(r["factor"])
     return f
 
 def sma(a, n, k):
@@ -166,12 +141,11 @@ def flag(a, b, eps=0.5):
 def sectors(stocks):
     B = json.load(open(H + "/baskets.json"))
     theme = {k: dict(ids=v, **agg(v, stocks)) for k, v in B.items()}
-    co = json.load(open(RAW + "/twse_company.json"))
+    co = json.load(open(H + "/src/company.json"))
     off = {}
-    for r in co:
-        sid = r["公司代號"].strip()
+    for sid, ind in co.items():
         if sid in stocks and stocks[sid]["mk"] == "上市":
-            off.setdefault(IND.get(r["產業別"], r["產業別"]), []).append(sid)
+            off.setdefault(IND.get(ind, ind), []).append(sid)
     official = {k: dict(ids=v, **agg(v, stocks)) for k, v in off.items() if len(v) >= 3 and k in IND.values()}
     return theme, official
 
@@ -212,9 +186,25 @@ def load_in(tool, sid):
     except Exception: return None
 
 def build_detail(sel, date):
-    # ToAlpha 解析在 parse_toalpha()，由 README 規定檔名；缺檔就留空，不編造
+    """重點股詳情：解析 toalpha_in/；某檔某類資料這次抓失敗（或根本沒抓）就沿用上次 detail.json 的同一段，並標 stale＝上次資料日。"""
     import parse_toalpha as P
-    return {sid: P.parse_stock(sid, load_in, date) for sid in sel}
+    try: prev = json.load(open(H + "/data/detail.json")); pd_, pdate = prev.get("detail", {}), prev.get("date")
+    except Exception: pd_, pdate = {}, None
+    try: st = json.load(open(H + "/toalpha_in/_status.json"))
+    except Exception: st = None          # 沒抓過 → 全部視為失敗，沿用舊資料
+    SEC = {"br": ("broker_ratings", ("name", "ind", "rt", "ratings")), "fin": ("financials", ("fin",)),
+           "news": ("news", ("news",)), "cc": ("calendar", ("cc",))}
+    out = {}
+    for sid in sel:
+        d = P.parse_stock(sid, load_in, date); old = pd_.get(sid) or {}
+        for sec, (tool, keys) in SEC.items():
+            failed = st is None or (sid in st.get(tool, []) if isinstance(st.get(tool), list) else bool(st.get(tool)))
+            if failed and any(k in old for k in keys):
+                for k in keys:
+                    if k in old: d[k] = old[k]
+                d.setdefault("stale", {})[sec] = (old.get("stale") or {}).get(sec) or pdate
+        out[sid] = d
+    return out
 
 def cmd_build():
     dates, w, stocks, kl = compute(); theme, official = sectors(stocks); ext = ext_sectors(stocks); sel, ins, outs = pick(theme, stocks)
@@ -257,4 +247,4 @@ def cmd_publish():
 
 if __name__ == "__main__":
     c = sys.argv[1] if len(sys.argv) > 1 else "build"
-    {"check": cmd_check, "fetch": fetch, "select": cmd_select, "build": cmd_build, "publish": cmd_publish}[c]() if c != "all" else (fetch(), cmd_select(), cmd_build())
+    {"check": cmd_check, "fetch": fetch, "select": cmd_select, "build": cmd_build, "publish": cmd_publish}[c]()
