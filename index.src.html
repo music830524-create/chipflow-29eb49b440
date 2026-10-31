@@ -13,8 +13,11 @@ body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,"
 a{color:var(--ac)}
 header{position:sticky;top:0;z-index:5;background:#101828f2;backdrop-filter:blur(8px);padding:10px 14px;border-bottom:1px solid var(--line)}
 header h1{margin:0;font-size:17px}
-.asof{font-size:12.5px;color:var(--mut)}
-.asof b{color:#ffd166}
+.asof{display:flex;flex-wrap:wrap;gap:2px 14px;margin-top:3px;font-size:13px;color:var(--mut);line-height:1.45}
+.asof span{white-space:nowrap}.asof b{color:#ffd166;font-size:14px}
+.upd{display:flex;align-items:center;gap:12px;margin:0 0 10px}
+.upd a.btn{flex:none;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:12px;background:var(--ac);color:#06101f;font-weight:700;font-size:15px;text-decoration:none}
+.upd .note{margin:0}
 main{padding:12px 12px 40px;max-width:640px;margin:auto}
 .card{background:var(--card);border-radius:14px;padding:12px 14px;margin:0 0 10px}
 .tabs{display:flex;gap:8px;margin:0 0 10px}
@@ -68,16 +71,17 @@ const i0=v=>v==null?'–':(v>0?'+':'')+Math.round(v).toLocaleString('en-US');
 const wd=d=>'日一二三四五六'[new Date(d+'T00:00:00+08:00').getDay()];
 const sum=(a,n)=>a.slice(-n).reduce((x,y)=>x+y,0);
 const NOTE_SECT=`<div class="card note"><b>怎麼算</b><br>外資＝外陸資＋外資自營商；投信＝投信。資料來源：證交所（TWSE）與櫃買中心（TPEx）每日公開的三大法人買賣超。金額（億元）＝各日「買賣超張數×當日收盤價」加總；漲跌幅為族群成分股等權平均（已用除權息因子還原）。視窗有 1／5／10／20 個交易日可切換。<br><b>趨勢旗標</b>：仍比較近5日合計與前5日（第6–10日）合計（20日視窗只用來看較長期的累積，不改變旗標）——例如「由賣轉買」＝前5日淨賣、近5日淨買；「買超加速」＝近5日買超≥前5日1.5倍。差距小於0.5億視為持平。<br><b>族群定義</b>：「主題族群」是自訂的26個題材籃子；「新增族群」是另外參考外部分類（FinLab、MoneyDJ、經濟日報、工商時報、財報狗、口袋學堂等，每族群的參考來源見族群頁）新增的題材籃子，共34個，成分股由人工比對公司業務後列入，與原籃子可能重疊，且不參與「重點股／個股詳情」的挑選（同一檔可出現在多個籃子，不可加總）；「官方產業」是證交所公司產業別（僅上市、成分≥3檔）。兩者不同源，數字不會互相對得上。<br><b>K線／均線</b>：個股頁的近20個交易日K線取自證交所／櫃買中心每日收盤行情（開高低收、成交量），已用除權息因子還原；紅漲綠跌；5MA、20MA 以還原收盤計算（20MA 需往前多取19天）。族群的「20日等權指數」＝每日以成分股當日還原報酬的簡單平均連乘，起點＝100，不是加權指數。</div>`;
-const NOTE_DETAIL=`<div class="card note"><b>個股詳細頁範圍</b>：僅涵蓋「主題族群」中近5日資金流入前10名、流出前5名的族群裡，各挑出的重點股（流入各3檔、流出各2檔，共約39檔）。其他個股（所有列在族群裡的股票都能點進去）有近20日籌碼、K線與漲跌幅，但沒有評等／新聞／財報。<br>券商評等、新聞、財報、法說會資料來自 ToAlpha（toalpha.tw）；評等與目標價轉述自公開報導，請以原報導連結為準；新聞只列有發佈時間與來源連結者。非投資建議。</div>`;
+const NOTE_DETAIL=`<div class="card note"><b>個股詳細頁範圍</b>：涵蓋「主題族群」與「新增族群」的全部成分股（去重後約 __NCOV__ 檔）：每天更新評等／新聞；財報重點股每天、其餘每 3 天輪抓（頁面標示抓取日）。不在任何族群裡的個股（只出現在「官方產業」）只有近20日籌碼、K線與漲跌幅，沒有評等／新聞／財報。<br>券商評等、新聞、財報、法說會資料來自 ToAlpha（toalpha.tw）；評等與目標價轉述自公開報導，請以原報導連結為準；新聞只列有發佈時間與來源連結者。非投資建議。</div>`;
 
 async function load(){
   const g=async u=>{const r=await fetch(u+'?v='+VER);if(!r.ok)throw new Error(u+' '+r.status);return r.json()};
   [F,D]=await Promise.all([g('data/flows.json'),g('data/detail.json')]);
   const d=F.date;
-  $('#asof').innerHTML=`資料日期 <b>${d}（${wd(d)}）收盤</b> · 產生於 ${esc(F.generated)}（台北時間）`;
+  $('#asof').innerHTML=`<span>資料日 <b>${d}（${wd(d)}）</b></span><span>最後更新 <b>${esc(F.generated)}</b> 台北</span>`;
   $('#verchip').textContent=d.slice(5);
   route();
 }
+const UPD=`<div class="card upd"><a class="btn" href="https://github.com/music830524-create/chipflow-29eb49b440/actions/workflows/daily-update.yml" target="_blank" rel="noopener">⟳ 更新資料</a><div class="note">需登入 GitHub，按 Run workflow 執行（休市日請勾選 force），約 2–3 分鐘後重新整理。</div></div>`;
 function winData(o,w){return {f:o['f'+w],t:o['t'+w],fa:o['fa'+w],ta:o['ta'+w],a:o['a'+w],r:o['r'+w]}}
 function stAmt(s,w){const fa=s['fa'+w],ta=s['ta'+w];return {fa,ta,a:fa+ta}}
 function winTabs(){return `<div class="tabs">${[1,5,10,20].map(w=>`<button data-w="${w}" class="${S.win==w?'on':''}">${w}日</button>`).join('')}</div>`}
@@ -91,7 +95,7 @@ function home(){
   h+=`<div class="tabs"><button data-tab="theme" class="${S.tab=='theme'?'on':''}">主題族群</button><button data-tab="ext" class="${S.tab=='ext'?'on':''}">新增族群</button><button data-tab="official" class="${S.tab=='official'?'on':''}">官方產業</button></div>`+winTabs();
   h+=`<div class="sub" style="margin:0 2px 8px">依「近${S.win}日 外資＋投信 合計」由買超到賣超排序 · 點族群看個股</div>`;
   for(const k of names){const v=ex[k],w=S.win,a=v['a'+w];
-    const has=S.tab=='theme'&&(F.inflow.includes(k)||F.outflow.includes(k));
+    const has=false;
     h+=`<a class="card item" href="#/s/${S.tab}/${encodeURIComponent(k)}"><div class="row"><div><div class="nm">${esc(k)}${has?'<span class="tag">有個股詳情</span>':''}</div>
       <div class="sub">外資 <span class="${cls(v['fa'+w])}">${sgn(v['fa'+w],0)}</span> · 投信 <span class="${cls(v['ta'+w])}">${sgn(v['ta'+w],0)}</span> 億 · 均漲跌 <span class="${cls(v['r'+w])}">${pct(v['r'+w])}</span></div>
       <div class="sub"><span class="chip ${v.flag[1]}" style="margin-left:0">${esc(v.flag[0])}</span> 近5日${sgn(v.a5,0)} / 前5日${sgn(v.a5prev,0)} 億</div></div>
@@ -125,7 +129,7 @@ function sector(type,name){
 function bars(arr){const mx=Math.max(...arr.map(Math.abs),1e-9);
   return `<div class="bars">${arr.map((x,k)=>`<i title="${F.dates[k]} ${sgn(x,0)}億" style="height:${Math.max(2,Math.abs(x)/mx*100)}%;background:${x>=0?'var(--up)':'var(--dn)'}"></i>`).join('')}</div><div class="sub row"><span>${F.dates[0].slice(5)}</span><span>${F.dates[F.dates.length-1].slice(5)}</span></div>`}
 
-const stl=(d,k)=>d&&d.stale&&d.stale[k]?`<div class="warn" style="margin:0 2px 6px">⚠ 本次更新時此項資料抓取失敗，以下沿用 ${esc(d.stale[k])} 的資料</div>`:'';
+const stl=(d,k)=>d&&d.stale&&d.stale[k]?`<div class="warn" style="margin:0 2px 6px">⚠ 本次更新時此項資料抓取失敗，以下沿用 ${esc(d.stale[k])} 的資料（下次更新會再試）</div>`:'';
 function stock(id){
   const s=F.stocks[id]; if(!s)return `<a class="back" href="#/">‹ 返回</a><div class="card">找不到此股票</div>`;
   const d=D.detail[id];
@@ -136,11 +140,12 @@ function stock(id){
   ${[1,5,10,20].map(w=>{const a=stAmt(s,w);return `<tr><td>${w}日</td><td class="${cls(s['f'+w])}">${i0(s['f'+w])}</td><td class="${cls(s['t'+w])}">${i0(s['t'+w])}</td><td class="${cls(a.a)}"><b>${sgn(a.a,1)}</b></td><td class="${cls(s['r'+w])}">${pct(s['r'+w])}</td></tr>`}).join('')}</table>
   </div><div class="card"><div class="sub" style="margin-bottom:4px">近20個交易日K線（已還原除權息）<span class="lg"><i style="background:#ffb020"></i>5MA<i style="background:#5aa2ff"></i>20MA</span></div><div id="kbox"><div class="note">K線載入中…</div></div></div>`;
   setTimeout(()=>loadK(id),0);
-  if(!d)return h+`<div class="card note">此股不在詳細頁範圍（僅「流入前10／流出前5族群」的重點股有評等、新聞、財報、法說會）。</div>`;
+  if(!d)return h+`<div class="card note">此股不在任何主題／新增族群裡，所以沒有評等、新聞、財報、法說會資料（上方仍有籌碼與K線）。</div>`;
   // 評等
   const rt=d.rt;
   h+=`<h2>券商評等 / 目標價</h2>`+stl(d,'br');
-  if(rt){h+=`<div class="card"><div class="kv"><div><span>統計券商</span><b>${rt.n} 家（多${rt.pos}／中${rt.neu}／空${rt.neg}）</b></div>
+  if(rt&&!rt.n){h+=`<div class="card note">近60日沒有公開券商評等／目標價報導（截至 ${esc(rt.asof)}）· <a href="${safeUrl(rt.link)}" target="_blank" rel="noopener">ToAlpha</a></div>`}
+  else if(rt){h+=`<div class="card"><div class="kv"><div><span>統計券商</span><b>${rt.n} 家（多${rt.pos}／中${rt.neu}／空${rt.neg}）</b></div>
    <div><span>目標價中位數</span><b>${rt.med??'–'}</b></div><div><span>最高／最低</span><b>${rt.hi??'–'} / ${rt.lo??'–'}</b></div>
    <div><span>相對收盤 ${rt.close??''}</span><b class="${cls(rt.up)}">${rt.up==null?'–':pct(rt.up)}</b></div></div>
    <div class="sub" style="margin-top:6px">近60日公開報導整理 · 截至 ${esc(rt.asof)} · <a href="${safeUrl(rt.link)}" target="_blank" rel="noopener">ToAlpha</a></div></div>`;
@@ -152,7 +157,7 @@ function stock(id){
   // 財報
   const f=d.fin; h+=`<h2>最新一季財報重點</h2>`+stl(d,'fin');
   if(f){const P=(x)=>x==null?'–':(x*100).toFixed(1)+'%';
-    h+=`<div class="card"><div class="sub">${esc(f.p)} · 公開資訊觀測站財報 · <a href="${safeUrl(f.link)}" target="_blank" rel="noopener">ToAlpha</a></div><div class="kv" style="margin-top:6px">
+    h+=`<div class="card"><div class="sub">${esc(f.p)} · 公開資訊觀測站財報${d.fin_at?' · 抓取日 '+esc(d.fin_at):''} · <a href="${safeUrl(f.link)}" target="_blank" rel="noopener">ToAlpha</a></div><div class="kv" style="margin-top:6px">
     <div><span>營收（億）</span><b>${f.rev??'–'}</b></div><div><span>營收年增</span><b class="${cls(f.yoy)}">${f.yoy==null?'–':pct(f.yoy)}</b></div>
     <div><span>毛利率</span><b>${P(f.gm)}</b></div><div><span>營業利益率</span><b>${P(f.om)}</b></div>
     <div><span>稅後淨利（億）</span><b>${f.ni??'–'}</b></div><div><span>EPS（元）</span><b>${f.eps??'–'}</b></div>
@@ -227,9 +232,9 @@ function route(){
   if(!F)return;
   const h=location.hash||'#/', p=h.split('/');
   let html;
-  if(p[1]=='s')html=sector(p[2],decodeURIComponent(p[3]||''));
-  else if(p[1]=='k')html=stock(p[2]);
-  else html=home();
+  if(p[1]=='s')html=sector(p[2],decodeURIComponent(p[3]||''))+UPD;
+  else if(p[1]=='k')html=stock(p[2])+UPD;
+  else html=UPD+home();
   $('#app').innerHTML=html; window.scrollTo(0,S.keep||0); S.keep=0;
 }
 document.addEventListener('click',e=>{

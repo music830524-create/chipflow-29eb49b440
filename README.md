@@ -7,13 +7,20 @@
 ## 每日更新流程（完全由 GitHub Actions 執行，不需要 LLM／agent／排程）
 
 `.github/workflows/daily-update.yml`：
-- **排程**：`cron: '0 10 * * 1-5'`（UTC 10:00＝台北平日 18:00；GitHub 可能延遲數分鐘到數十分鐘）。也能到 Actions 頁手動「Run workflow」（`force` 勾選＝略過「今天是否交易日」檢查，用最新完整交易日重建，測試或補跑用）。
+- **排程**：`cron: '0 10 * * 1-5'`（UTC 10:00＝台北平日 18:00；GitHub 可能延遲數分鐘到數十分鐘）。也能到 Actions 頁手動「Run workflow」（`force` 勾選＝略過「今天是否交易日」檢查，用最新完整交易日重建，測試或補跑用）。網頁上的「⟳ 更新資料」按鈕只是連到這個 workflow 的 Actions 頁（需登入 GitHub 後自己按 Run workflow），網頁與 repo 裡沒有任何 token。
+
 - **權限**：`permissions: contents: write, pages: write`，只用內建 `GITHUB_TOKEN` 推回 `main`；repo 內沒有任何 token。
-- **步驟**：`python3 daily.py`
+- **步驟**（job timeout 90 分鐘）：`python3 daily.py`
   1. `fetch`：`pubdata.py` 直接抓證交所／櫃買中心公開資料（收盤行情 MI_INDEX、三大法人 T86、上櫃 otc、上櫃法人 dailyTrade，皆 JSON；另有除權息 TWT49U／exDailyQ、上市公司產業別），壓縮成 `hist/<日期>.json`（只留普通股，保留近 60 個交易日）與 `src/`。近 7 天缺漏或不完整的日子會回頭補。
   2. `check`：今天 TWSE 無行情＝休市 → 直接結束、不 commit；行情已出但法人/上櫃資料未齊 → 每 5 分鐘重試（最多 30 分鐘），仍未齊就用最新完整交易日重建，隔天補上。
-  3. `select`：**純程式規則**挑重點股（`build.py` 的 `pick()`）：原 26 個主題籃子依近 5 日外資＋投信合計排序，流入前 10 名各取買超最多 3 檔、流出前 5 名各取賣超最多 2 檔，約 39 檔（寫 `data/selected.json`）。
-  4. `toalpha_fetch.py`：用 Python 直接呼叫 ToAlpha 公開 MCP 端點 `https://toalpha.tw/mcp`（JSON-RPC：`initialize` → `tools/call`）。每天約 **88 次**：`calendar` 1、`news` 2＋補查約 5、`broker_ratings` 39、`financials` 39。呼叫間隔 ≥1.3 秒（約 46 次/分，低於公開額度 60 次/分、5,000 次/日），429 依 `Retry-After` 或指數退避重試；單一呼叫失敗不會讓 build 失敗——該檔該類資料沿用上次 `detail.json`，頁面標「本次抓取失敗，沿用 YYYY-MM-DD 的資料」。
+  3. `select`：**純程式規則**挑「重點股」（`build.py` 的 `pick()`）：原 26 個主題籃子依近 5 日外資＋投信合計排序，流入前 10 名各取買超最多 3 檔、流出前 5 名各取賣超最多 2 檔，約 39 檔。另外詳情**涵蓋範圍＝`baskets.json`＋`baskets_ext.json` 全部成分股去重後的聯集（379 檔）**（寫 `data/selected.json`：`stocks`＝涵蓋清單與所屬族群，`key`＝重點股）。
+  4. `toalpha_fetch.py`：用 Python 直接呼叫 ToAlpha 公開 MCP 端點 `https://toalpha.tw/mcp`（JSON-RPC：`initialize` → `tools/call`）。每天約 **600 次**（上限 1500 次／45 分鐘，正常約 15 分鐘）：
+     - `calendar` 1 次（法說會）。
+     - `news` 約 50–70 次：379 檔每天全抓，每 20 檔一批（14 天）；新聞少於 3 則的每 8 檔一組再補查 30 天；回傳筆數達 limit 視為被截斷就對半拆開重查。
+     - `broker_ratings` 379 次：每天每檔各 1 次。
+     - `financials`：重點股每天；其餘每 3 天輪抓一次（`(代號+日期序號)%3==0`；從沒抓過的先抓），約 39＋110 次。沒輪到的沿用舊財報，財報卡片標「抓取日」。
+     - 呼叫間隔 ≥1.3 秒（約 46 次/分，低於公開額度 60 次/分、5,000 次/日），429 依 `Retry-After` 或指數退避重試。重點股排在前面抓，若達呼叫上限或時間限制，被犧牲的是非重點股（沿用舊資料）。
+     - 單一呼叫失敗不會讓 build 失敗——該檔該類資料沿用上次 `detail.json`，頁面標「本次更新時此項資料抓取失敗，以下沿用 YYYY-MM-DD 的資料」。
   5. `build`：產生 `data/flows.json`、`data/detail.json`、`data/k/*.json`、`index.html`。
   6. 有變更才 `git commit`＋`git push`（訊息 `update <資料日> (actions)`），並呼叫 Pages API 要求重新建置（GitHub Pages 約 1 分鐘更新）。
 - **選用金鑰**：到 repo Settings → Secrets and variables → Actions 新增 `TOALPHA_API_KEY`，程式就會帶 `Authorization: Bearer`；沒設就不帶（公開額度，照 IP 計算；GitHub 的 runner IP 是共用的，若常被 429 再考慮設金鑰）。金鑰只存在 Secrets，不寫進檔案或 log。

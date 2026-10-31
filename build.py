@@ -3,7 +3,7 @@
 
   python3 build.py fetch            # 抓 TWSE/TPEx 公開資料 → hist/、src/（見 pubdata.py）
   python3 build.py check            # exit 3=休市、4=資料未齊
-  python3 build.py select           # 純程式規則挑重點股（約39檔），寫 data/selected.json
+  python3 build.py select           # 純程式規則挑重點股（重點股約39檔），寫 data/selected.json
   python3 toalpha_fetch.py          # 用 Python 直接呼叫 ToAlpha MCP，寫 toalpha_in/
   python3 build.py build            # 產生 data/flows.json、data/detail.json、data/k/<代號>.json（近20日K線）、index.html
   python3 daily.py [--force]        # 以上全部串起來
@@ -172,10 +172,25 @@ def pick(theme, stocks):
         for i in ids[:K_OUT]: sel.setdefault(i, k)
     return sel, ins, outs
 
+def coverage(stocks, key):
+    """詳情涵蓋範圍＝baskets.json（主題族群）＋baskets_ext.json（新增族群）全部成分股的聯集（去重、且今天有行情）。
+    回傳 {代號: 所屬族群名}：重點股用挑選它的族群；其餘用第一個含有它的主題族群，否則第一個新增族群。"""
+    cov = dict(key)
+    for k, v in json.load(open(H + "/baskets.json")).items():
+        for i in v:
+            if i in stocks: cov.setdefault(i, k)
+    p = H + "/baskets_ext.json"
+    if os.path.exists(p):
+        for k, v in json.load(open(p)).items():
+            for i in v["ids"]:
+                if i in stocks: cov.setdefault(i, k)
+    return cov
+
 def cmd_select():
     dates, w, stocks, kl = compute(); theme, _ = sectors(stocks); sel, ins, outs = pick(theme, stocks)
-    json.dump(dict(date=dates[-1], stocks=sel, inflow=ins, outflow=outs), open(H + "/data/selected.json", "w"), ensure_ascii=False, indent=1)
-    print("data date", dates[-1]); print("流入", ins); print("流出", outs); print(len(sel), "stocks:", ",".join(sel))
+    cov = coverage(stocks, sel)
+    json.dump(dict(date=dates[-1], stocks=cov, key=list(sel), inflow=ins, outflow=outs), open(H + "/data/selected.json", "w"), ensure_ascii=False, indent=1)
+    print("data date", dates[-1]); print("流入", ins); print("流出", outs); print("重點股", len(sel), "檔；詳情涵蓋", len(cov), "檔（族群聯集）")
 
 # ------------------------------------------------------------- ToAlpha ingest
 def load_in(tool, sid):
@@ -197,17 +212,24 @@ def build_detail(sel, date):
     out = {}
     for sid in sel:
         d = P.parse_stock(sid, load_in, date); old = pd_.get(sid) or {}
+        skip = st is not None and sid in st.get("fin_skip", [])          # 財報輪休：本次沒抓，沿用上次（標「抓取日」而非警告）
+        if skip and "fin" in old:
+            d["fin"] = old["fin"]; d["fin_at"] = old.get("fin_at") or pdate
+        elif "fin" in d: d["fin_at"] = date
         for sec, (tool, keys) in SEC.items():
+            if sec == "fin" and skip and "fin" in old: continue
             failed = st is None or (sid in st.get(tool, []) if isinstance(st.get(tool), list) else bool(st.get(tool)))
             if failed and any(k in old for k in keys):
                 for k in keys:
                     if k in old: d[k] = old[k]
+                if sec == "fin" and "fin_at" in old: d["fin_at"] = old["fin_at"]
                 d.setdefault("stale", {})[sec] = (old.get("stale") or {}).get(sec) or pdate
         out[sid] = d
     return out
 
 def cmd_build():
-    dates, w, stocks, kl = compute(); theme, official = sectors(stocks); ext = ext_sectors(stocks); sel, ins, outs = pick(theme, stocks)
+    dates, w, stocks, kl = compute(); theme, official = sectors(stocks); ext = ext_sectors(stocks); key, ins, outs = pick(theme, stocks)
+    sel = coverage(stocks, key)
     date = dates[-1]
     allf = agg(list(stocks), stocks)
     # 瘦身：每檔只留 1/5/10/20 日合計；逐日序列與 K 線放到 data/k/<sid>.json，點進個股才載入
@@ -236,7 +258,7 @@ def cmd_build():
     json.dump(dict(date=date, detail=detail), open(H + "/data/detail.json", "w"), ensure_ascii=False, separators=(",", ":"))
     # index.html 裡的版本號避免手機快取舊資料
     ver = date.replace("-", "") + dt.datetime.now(TZ).strftime("%H%M")
-    html = open(H + "/index.src.html").read().replace("__VER__", ver)
+    html = open(H + "/index.src.html").read().replace("__VER__", ver).replace("__NCOV__", str(len(sel)))
     open(H + "/index.html", "w").write(html)
     print("built", date, "stocks", len(stocks), "detail", len(detail), "kfiles", len(kl), "ver", ver)
 
