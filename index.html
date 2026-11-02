@@ -6,6 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#101828">
 <title>籌碼流向</title>
+<link rel="stylesheet" href="ext.css?v=202610301017">
 <style>
 :root{--bg:#0f1420;--card:#192032;--card2:#212a40;--tx:#e8ecf4;--mut:#8f9ab3;--up:#ff5a5f;--dn:#2fcf84;--ac:#5aa2ff;--line:#2b3550}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -56,10 +57,12 @@ svg.ch{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;
 </style>
 </head>
 <body>
-<header><h1>籌碼流向 <span class="chip" id="verchip"></span></h1><div class="asof" id="asof">載入中…</div></header>
+<header><h1>籌碼流向 <span class="chip" id="verchip"></span></h1><div class="asof" id="asof">載入中…</div><nav id="nav" aria-label="主分頁"></nav></header>
 <main id="app"></main>
+<footer class="ft">起漲偵測、族群輪動與工具箱皆為公開資料的規則運算，不使用 AI，非投資建議。工具箱的部分演算法與型態辨識程式移植自 <a href="https://github.com/wakin61043/tw-trading-dashboard" target="_blank" rel="noopener">tw-trading-dashboard</a>（MIT License，© 2026 EquiLens contributors；授權全文見 repo 的 THIRD_PARTY_LICENSES）。資料來源：證交所、櫃買中心、集保結算所、期交所、公開資訊觀測站、鉅亨網、Forex Factory、ToAlpha。</footer>
+<script src="ext.js?v=202610301017"></script>
 <script>
-const VER="202610302317";
+const VER="202610301017";
 let F=null,D=null,S={tab:'theme',win:5,more:{}};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -231,6 +234,8 @@ function idxLine(a){
 function route(){
   if(!F)return;
   const h=location.hash||'#/', p=h.split('/');
+  if(EXT.mine(h)){EXT.render();return}
+  EXT.nav(h);
   let html;
   if(p[1]=='s')html=sector(p[2],decodeURIComponent(p[3]||''))+UPD;
   else if(p[1]=='k')html=stock(p[2])+UPD;

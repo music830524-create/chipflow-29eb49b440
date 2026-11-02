@@ -1,0 +1,29 @@
+第三方授權聲明 / Third-party notices
+
+本專案的「工具箱」分頁移植／改寫了下列開源專案的部分程式與演算法（族群強度加權、資金熱浪概念、型態辨識 patterns.mjs、研究評分公式、異動雷達規則）。
+專案：tw-trading-dashboard  https://github.com/wakin61043/tw-trading-dashboard
+授權：MIT License
+已修改：patterns.mjs 移除了對該專案其他模組的依賴並改用本地輔助函式（vendor/tw-trading-dashboard/patterns.mjs 檔頭有說明）；其餘為依其公式以 Python／JavaScript 重寫。
+
+------------------------------------------------------------
+MIT License
+
+Copyright (c) 2026 EquiLens contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

@@ -27,6 +27,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4        # 型態選股用 node 執行 vendored patterns.mjs
+        with:
+          node-version: '20'
       - name: 抓資料並重建（不需 LLM）
         env:
           TOALPHA_API_KEY: ${{ secrets.TOALPHA_API_KEY }}   # 選用；沒設就不帶金鑰

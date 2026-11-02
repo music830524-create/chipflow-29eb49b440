@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""每日更新（GitHub Actions 與本機共用）：fetch → check → select → ToAlpha → build。完全不需要 LLM。
+"""每日更新（GitHub Actions 與本機共用）：fetch → check → select → ToAlpha → build → extras（A/B/C 分頁資料）。完全不需要 LLM。
 用法：python3 daily.py [--force] [--no-toalpha]
   --force       不檢查「今天是否交易日」，直接用最新一個完整交易日重建（手動測試／補跑用）
   --no-toalpha  不呼叫 ToAlpha（詳情沿用上次資料並標註日期）
@@ -23,6 +23,10 @@ def main():
     if skip_ta: print("略過 ToAlpha")
     else: toalpha_fetch.run()
     build.cmd_build()
+    try:                                  # 起漲偵測／輪動／工具箱：失敗不影響主頁
+        import extras; extras.main()
+    except Exception as e:
+        import traceback; traceback.print_exc(); print("extras 失敗（主頁不受影響）：", repr(e))
     return 0
 
 if __name__ == "__main__":

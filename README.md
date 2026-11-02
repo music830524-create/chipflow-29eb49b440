@@ -11,7 +11,7 @@
 
 - **權限**：`permissions: contents: write, pages: write`，只用內建 `GITHUB_TOKEN` 推回 `main`；repo 內沒有任何 token。
 - **步驟**（job timeout 90 分鐘）：`python3 daily.py`
-  1. `fetch`：`pubdata.py` 直接抓證交所／櫃買中心公開資料（收盤行情 MI_INDEX、三大法人 T86、上櫃 otc、上櫃法人 dailyTrade，皆 JSON；另有除權息 TWT49U／exDailyQ、上市公司產業別），壓縮成 `hist/<日期>.json`（只留普通股，保留近 60 個交易日）與 `src/`。近 7 天缺漏或不完整的日子會回頭補。
+  1. `fetch`：`pubdata.py` 直接抓證交所／櫃買中心公開資料（收盤行情 MI_INDEX、三大法人 T86、上櫃 otc、上櫃法人 dailyTrade，皆 JSON；另有除權息 TWT49U／exDailyQ、上市公司產業別），壓縮成 `hist/<日期>.json`（只留普通股，保留近 150 個交易日）與 `src/`。近 7 天缺漏或不完整的日子會回頭補。
   2. `check`：今天 TWSE 無行情＝休市 → 直接結束、不 commit；行情已出但法人/上櫃資料未齊 → 每 5 分鐘重試（最多 30 分鐘），仍未齊就用最新完整交易日重建，隔天補上。
   3. `select`：**純程式規則**挑「重點股」（`build.py` 的 `pick()`）：原 26 個主題籃子依近 5 日外資＋投信合計排序，流入前 10 名各取買超最多 3 檔、流出前 5 名各取賣超最多 2 檔，約 39 檔。另外詳情**涵蓋範圍＝`baskets.json`＋`baskets_ext.json` 全部成分股去重後的聯集（379 檔）**（寫 `data/selected.json`：`stocks`＝涵蓋清單與所屬族群，`key`＝重點股）。
   4. `toalpha_fetch.py`：用 Python 直接呼叫 ToAlpha 公開 MCP 端點 `https://toalpha.tw/mcp`（JSON-RPC：`initialize` → `tools/call`）。每天約 **600 次**（上限 1500 次／45 分鐘，正常約 15 分鐘）：
@@ -27,7 +27,7 @@
 
 本機也能跑同一支：`python3 daily.py [--force] [--no-toalpha]`（只需 Python 3 標準庫，無需安裝套件；`python3 build.py publish` 仍可手動 commit/push）。
 
-需要 ≥40 個交易日的 `hist/`（K線20根＋20MA暖機）；repo 內已附近 50 日，之後每天增量。若不足，build 會報錯並提示。
+主頁需要 ≥40 個交易日的 `hist/`（K線20根＋20MA暖機）；擴充分頁（輪動 ≥45 日、研究評分 ≥140 日）使用 `hist/` 近 150 日，`pubdata.backfill()` 會自動補齊（冪等；已齊全時日常排程不做事）。若不足，build 會報錯並提示。
 
 缺資料時（ToAlpha 沒回、少某檔）頁面會顯示「無資料」或沿用舊資料並標日期，不會編造。
 
@@ -47,3 +47,13 @@
 ## 注意
 - ToAlpha 條款可能限制資料再散布；本站為個人使用，repo 名稱不可猜、頁面 `noindex`，請勿公開分享連結。
 - 評等/目標價為轉述公開報導，以原連結為準；不構成投資建議。
+
+## 擴充分頁：起漲／輪動／工具（`extras.py`、`ext.js`、`ext.css`）
+
+導覽列 4 個分頁：**籌碼**（原功能不變）、**起漲**（`#/rise`）、**輪動**（`#/rrg`）、**工具**（`#/tools/<功能>`）。全部是公開資料的規則運算：**沒有 LLM、沒有付費 API、不需新增任何 token**；新增的資料來源都是公開端點（證交所 BWIBBU_d／BFI82U、櫃買中心、集保結算所開放資料、期交所、公開資訊觀測站營收開放資料、鉅亨網、Forex Factory），ToAlpha 每日呼叫量不變（約 600 次）。
+
+- **A 起漲偵測**（`data/rise.json`）：每個族群（主題／新增／官方）的等權指數，5 個條件（站上20MA、20MA 5日斜率>0、相對強弱＝族群指數÷發行量加權股價報酬指數創20日高、≥50%成分站上自己的20MA、5日漲幅≥3%）；≥5 分＝起漲，≥3 分且前兩項成立＝候選，跌破20MA＝轉弱。頁面標示「規則定義，非預測」。
+- **B 族群輪動 RRG**（`data/rrg.json`）：基準＝**證交所發行量加權股價報酬指數**（含股利）；RS-Ratio＝相對強弱的20日 z 分數+100，RS-Momentum＝RS-Ratio 5日變化+100；尾巴長度可調（3–20 日），點圓點可進入族群頁。
+- **C 工具箱**（移植自 [tw-trading-dashboard](https://github.com/wakin61043/tw-trading-dashboard)，MIT）：今日焦點（規則版盤後日報＋新聞＋經濟日曆）、族群排名、資金熱浪、型態選股（直接執行 vendored `vendor/tw-trading-dashboard/patterns.mjs`，需要 node）、研究評分、異動雷達（盤後版）、法人／期貨籌碼、大戶集中度（集保，歷史每週累積）、自選（localStorage）。沒搬的功能與原因見 PR／交付說明：盤中即時、當沖、五檔、推播、分點／權證（需付費 FinMind）、AI 報告（需 AI 金鑰）。
+- 授權：見 `THIRD_PARTY_LICENSES` 與 `vendor/tw-trading-dashboard/LICENSE`；頁尾也有來源與授權標示。
+- 擴充分頁任何一段失敗都不影響主頁（`daily.py` 以 try/except 隔離，沿用上次的 `data/*.json`）。
