@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#101828">
 <title>籌碼流向</title>
-<link rel="stylesheet" href="ext.css?v=202611092034">
+<link rel="stylesheet" href="ext.css?v=202611102009">
 <style>
 :root{--bg:#0f1420;--card:#192032;--card2:#212a40;--tx:#e8ecf4;--mut:#8f9ab3;--up:#ff5a5f;--dn:#2fcf84;--ac:#5aa2ff;--line:#2b3550}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -60,9 +60,9 @@ svg.ch{display:block;width:100%;height:auto;touch-action:pan-y;user-select:none;
 <header><h1>籌碼流向 <span class="chip" id="verchip"></span></h1><div class="asof" id="asof">載入中…</div><nav id="nav" aria-label="主分頁"></nav></header>
 <main id="app"></main>
 <footer class="ft">起漲偵測、族群輪動與工具箱皆為公開資料的規則運算，不使用 AI，非投資建議。工具箱的部分演算法與型態辨識程式移植自 <a href="https://github.com/wakin61043/tw-trading-dashboard" target="_blank" rel="noopener">tw-trading-dashboard</a>（MIT License，© 2026 EquiLens contributors；授權全文見 repo 的 THIRD_PARTY_LICENSES）。資料來源：證交所、櫃買中心、集保結算所、期交所、公開資訊觀測站、鉅亨網、Forex Factory、ToAlpha。</footer>
-<script src="ext.js?v=202611092034"></script>
+<script src="ext.js?v=202611102009"></script>
 <script>
-const VER="202611092034";
+const VER="202611102009";
 let F=null,D=null,S={tab:'theme',win:5,more:{}};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -74,7 +74,7 @@ const i0=v=>v==null?'–':(v>0?'+':'')+Math.round(v).toLocaleString('en-US');
 const wd=d=>'日一二三四五六'[new Date(d+'T00:00:00+08:00').getDay()];
 const sum=(a,n)=>a.slice(-n).reduce((x,y)=>x+y,0);
 const NOTE_SECT=`<div class="card note"><b>怎麼算</b><br>外資＝外陸資＋外資自營商；投信＝投信。資料來源：證交所（TWSE）與櫃買中心（TPEx）每日公開的三大法人買賣超。金額（億元）＝各日「買賣超張數×當日收盤價」加總；漲跌幅為族群成分股等權平均（已用除權息因子還原）。視窗有 1／5／10／20 個交易日可切換。<br><b>趨勢旗標</b>：仍比較近5日合計與前5日（第6–10日）合計（20日視窗只用來看較長期的累積，不改變旗標）——例如「由賣轉買」＝前5日淨賣、近5日淨買；「買超加速」＝近5日買超≥前5日1.5倍。差距小於0.5億視為持平。<br><b>族群定義</b>：「主題族群」是自訂的26個題材籃子；「新增族群」是另外參考外部分類（FinLab、MoneyDJ、經濟日報、工商時報、財報狗、口袋學堂等，每族群的參考來源見族群頁）新增的題材籃子，共34個，成分股由人工比對公司業務後列入，與原籃子可能重疊，且不參與「重點股／個股詳情」的挑選（同一檔可出現在多個籃子，不可加總）；「官方產業」是證交所公司產業別（僅上市、成分≥3檔）。兩者不同源，數字不會互相對得上。<br><b>K線／均線</b>：個股頁的近20個交易日K線取自證交所／櫃買中心每日收盤行情（開高低收、成交量），已用除權息因子還原；紅漲綠跌；5MA、20MA 以還原收盤計算（20MA 需往前多取19天）。族群的「20日等權指數」＝每日以成分股當日還原報酬的簡單平均連乘，起點＝100，不是加權指數。</div>`;
-const NOTE_DETAIL=`<div class="card note"><b>個股詳細頁範圍</b>：涵蓋「主題族群」與「新增族群」的全部成分股（去重後約 379 檔）：每天更新評等／新聞；財報重點股每天、其餘每 3 天輪抓（頁面標示抓取日）。不在任何族群裡的個股（只出現在「官方產業」）只有近20日籌碼、K線與漲跌幅，沒有評等／新聞／財報。<br>券商評等、新聞、財報、法說會資料來自 ToAlpha（toalpha.tw）；評等與目標價轉述自公開報導，請以原報導連結為準；新聞只列有發佈時間與來源連結者。非投資建議。</div>`;
+const NOTE_DETAIL=`<div class="card note"><b>個股詳細頁範圍</b>：涵蓋「主題族群」與「新增族群」的全部成分股（去重後約 377 檔）：每天更新評等／新聞；財報重點股每天、其餘每 3 天輪抓（頁面標示抓取日）。不在任何族群裡的個股（只出現在「官方產業」）只有近20日籌碼、K線與漲跌幅，沒有評等／新聞／財報。<br>券商評等、新聞、財報、法說會資料來自 ToAlpha（toalpha.tw）；評等與目標價轉述自公開報導，請以原報導連結為準；新聞只列有發佈時間與來源連結者。非投資建議。</div>`;
 
 async function load(){
   const g=async u=>{const r=await fetch(u+'?v='+VER);if(!r.ok)throw new Error(u+' '+r.status);return r.json()};
